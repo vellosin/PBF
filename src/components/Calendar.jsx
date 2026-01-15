@@ -703,10 +703,10 @@ export function Calendar({ currentDate, appointments = [], onAppointmentClick, l
                                 {HOURS.map((h, idx) => (
                                     <div
                                         key={h}
-                                        className={`text-right pr-2 sm:pr-3 text-xs font-semibold text-slate-400 border-b border-slate-100 ${idx === 0 ? 'pt-2' : ''}`}
+                                        className={`flex items-start justify-end pr-2 sm:pr-3 text-xs font-semibold text-slate-400 border-b border-slate-100 ${idx === 0 ? 'pt-2' : ''}`}
                                         style={{ height: SLOT_HEIGHT }}
                                     >
-                                        <span className="relative -top-2">{h}:00</span>
+                                        <span className="leading-none">{h}:00</span>
                                     </div>
                                 ))}
                             </div>
@@ -794,10 +794,10 @@ export function Calendar({ currentDate, appointments = [], onAppointmentClick, l
                             {HOURS.map((h, idx) => (
                                 <div
                                     key={h}
-                                    className={`text-right pr-2 sm:pr-3 text-xs font-semibold text-slate-400 border-b border-slate-100 ${idx === 0 ? 'pt-2' : ''}`}
+                                    className={`flex items-start justify-end pr-2 sm:pr-3 text-xs font-semibold text-slate-400 border-b border-slate-100 ${idx === 0 ? 'pt-2' : ''}`}
                                     style={{ height: SLOT_HEIGHT }}
                                 >
-                                    <span className="relative -top-2">{h}:00</span>
+                                    <span className="leading-none">{h}:00</span>
                                 </div>
                             ))}
                         </div>

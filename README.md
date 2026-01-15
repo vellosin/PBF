@@ -24,6 +24,13 @@ Opcional:
 - `npm install`
 - `npm run dev`
 
+Se no Windows o PowerShell bloquear o `npm` com erro de `PSSecurityException` (scripts desabilitados), rode os comandos via `cmd.exe`:
+
+- `cmd /c "npm install"`
+- `cmd /c "npm run dev"`
+
+(Alternativa: ajustar a Execution Policy do PowerShell, se você souber o que está fazendo.)
+
 ## Deploy (Vercel)
 
 1) Suba o projeto para um repositório Git (GitHub/GitLab/Bitbucket).

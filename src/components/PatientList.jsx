@@ -256,8 +256,10 @@ export function PatientList({ patients, onAddPatient, onUpdatePatient }) {
             {/* Table */}
             <div className={`bg-white border border-slate-200 rounded-3xl shadow-xl shadow-slate-200/50 transition-all duration-300 ${(isFormOpen || isConfigOpen) ? 'opacity-50 pointer-events-none filter grayscale-[0.5]' : ''}`}>
                 <div className="p-2">
-                    <div className="overflow-x-auto overflow-y-hidden rounded-2xl p-1 sm:p-2">
-                    <table className="w-full text-left border-collapse">
+                    <div className="rounded-2xl bg-white border border-slate-100 p-2">
+                        <div className="rounded-xl overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-500 font-semibold tracking-wider leading-tight">
                                 {columns.filter(c => c.visible).map(col => (
@@ -298,6 +300,8 @@ export function PatientList({ patients, onAddPatient, onUpdatePatient }) {
                             )}
                         </tbody>
                     </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -79,7 +79,7 @@ export function OnboardingTutorialModal({
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => onClose?.()} />
 
       <div className="relative w-full max-w-xl rounded-3xl border border-white/20 bg-white/90 backdrop-blur-xl shadow-2xl flex flex-col max-h-[85vh]">
-        <div className="flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-slate-100 bg-white/60">
+        <div className="flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-slate-100 bg-white/60 rounded-t-3xl">
           <div>
             <div className="text-xs font-bold uppercase tracking-widest text-indigo-600">{t('tutorial')}</div>
             <h2 className="text-2xl font-extrabold text-slate-900 mt-1">{current.title}</h2>
@@ -117,7 +117,7 @@ export function OnboardingTutorialModal({
           ) : null}
         </div>
 
-        <div className="p-5 sm:p-6 border-t border-slate-100 bg-white/60">
+        <div className="p-5 sm:p-6 border-t border-slate-100 bg-white/60 rounded-b-3xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
               {steps.map((_, i) => (
