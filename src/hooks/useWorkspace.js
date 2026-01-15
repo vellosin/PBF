@@ -33,6 +33,7 @@ export function useWorkspace(session) {
   const userId = session?.user?.id || null;
 
   const [loading, setLoading] = useState(Boolean(supabase && userId));
+  const [error, setError] = useState('');
   const [workspaces, setWorkspaces] = useState([]); // {id,name,join_code,role}
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() => {
     try {
@@ -54,6 +55,7 @@ export function useWorkspace(session) {
 
     const load = async () => {
       setLoading(true);
+      setError('');
       const { data, error } = await supabase
         .from('workspace_members')
         .select('role, workspaces ( id, name, join_code, created_at )')
@@ -63,6 +65,7 @@ export function useWorkspace(session) {
 
       if (error) {
         setWorkspaces([]);
+        setError(formatSupabaseError(error));
         setLoading(false);
         return;
       }
@@ -92,6 +95,7 @@ export function useWorkspace(session) {
       });
 
       setWorkspaces(rows);
+      setError('');
 
       // Auto-select: read per-user key (migrate from legacy if needed) and validate it exists.
       const stored = (() => {
@@ -176,6 +180,7 @@ export function useWorkspace(session) {
   const refresh = async () => {
     if (!supabase || !userId) return;
     setLoading(true);
+    setError('');
     const { data } = await supabase
       .from('workspace_members')
       .select('role, workspaces ( id, name, join_code, created_at )')
@@ -245,6 +250,7 @@ export function useWorkspace(session) {
 
   return {
     loading,
+    error,
     workspaces,
     selectedWorkspaceId,
     selectedWorkspace,

@@ -50,6 +50,7 @@ function App() {
 
   const {
     loading: wsLoading,
+    error: wsError,
     workspaces,
     selectedWorkspaceId,
     selectedWorkspace,
@@ -67,6 +68,7 @@ function App() {
     if (!useSupabase) return;
     if (!isAuthed) return;
     if (wsLoading) return;
+    if (wsError) return;
     if (selectedWorkspace?.id) return;
 
     // Once we have a selected workspace, clear any previous init error.
@@ -98,6 +100,7 @@ function App() {
     workspaceInitError,
     useSupabase,
     workspaces,
+    wsError,
     wsLoading
   ]);
 
@@ -474,6 +477,7 @@ function App() {
       },
       workspace: {
         loading: wsLoading,
+        error: wsError || null,
         count: Array.isArray(workspaces) ? workspaces.length : 0,
         items: Array.isArray(workspaces)
           ? workspaces.map((w) => ({ id: w?.id || null, name: w?.name || null }))
@@ -511,6 +515,7 @@ function App() {
     session?.user?.id,
     useSupabase,
     workspaces,
+    wsError,
     wsLoading
   ]);
 
@@ -767,6 +772,13 @@ function App() {
           {workspaceInitError ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 whitespace-pre-line">
               {workspaceInitError}
+            </div>
+          ) : null}
+
+          {wsError ? (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 whitespace-pre-line">
+              <div className="font-extrabold">Erro ao carregar workspaces</div>
+              <div className="mt-1">{wsError}</div>
             </div>
           ) : null}
 
