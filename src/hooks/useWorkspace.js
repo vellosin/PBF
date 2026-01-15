@@ -134,9 +134,9 @@ export function useWorkspace(session) {
 
           const legacy = localStorage.getItem(LS_SELECTED_LEGACY) || '';
           if (legacy) {
-            // migrate legacy -> per-user (prevents cross-account leakage)
+            // Keep legacy key too: it is the only thing available before userId is known on refresh.
+            // This avoids a race where selection isn't persisted if selectWorkspace runs before userId.
             localStorage.setItem(perUserKey, legacy);
-            localStorage.removeItem(LS_SELECTED_LEGACY);
             return legacy;
           }
 
@@ -177,8 +177,13 @@ export function useWorkspace(session) {
       setSelectedWorkspaceId(nextId);
       try {
         const perUserKey = keyForUser(userId);
-        if (nextId) localStorage.setItem(perUserKey, nextId);
-        else localStorage.removeItem(perUserKey);
+        if (nextId) {
+          localStorage.setItem(perUserKey, nextId);
+          localStorage.setItem(LS_SELECTED_LEGACY, nextId);
+        } else {
+          localStorage.removeItem(perUserKey);
+          localStorage.removeItem(LS_SELECTED_LEGACY);
+        }
       } catch {
         // ignore
       }
@@ -201,10 +206,13 @@ export function useWorkspace(session) {
     setSelectedWorkspaceId(id);
     try {
       const k = keyForUser(userId);
-      if (id) localStorage.setItem(k, id);
-      else localStorage.removeItem(k);
-      // keep legacy key cleared to avoid cross-account issues
-      localStorage.removeItem(LS_SELECTED_LEGACY);
+      if (id) {
+        localStorage.setItem(k, id);
+        localStorage.setItem(LS_SELECTED_LEGACY, id);
+      } else {
+        localStorage.removeItem(k);
+        localStorage.removeItem(LS_SELECTED_LEGACY);
+      }
     } catch {
       // ignore
     }

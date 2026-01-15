@@ -63,6 +63,9 @@ function App() {
   const [workspaceAutoPickLoading, setWorkspaceAutoPickLoading] = useState(false);
   const [workspaceAutoPickMessage, setWorkspaceAutoPickMessage] = useState('');
 
+  const [workspaceConsolidating, setWorkspaceConsolidating] = useState(false);
+  const [workspaceConsolidateError, setWorkspaceConsolidateError] = useState('');
+
   // Single-user pivot: if the account has no workspace yet, create one automatically.
   // This removes the join/create workspace screen from the UX.
   const [autoWorkspaceCreating, setAutoWorkspaceCreating] = useState(false);
@@ -103,6 +106,72 @@ function App() {
     selectedWorkspace?.id,
     workspaceInitError,
     useSupabase,
+    workspaces,
+    wsError,
+    wsLoading
+  ]);
+
+  // One-account = one-workspace: if the user has multiple workspaces, consolidate them.
+  // This makes refresh consistent and prevents the "50%" behavior.
+  useEffect(() => {
+    if (!useSupabase || !supabase) return;
+    if (!isAuthed) return;
+    if (wsLoading || wsError) return;
+    const uid = session?.user?.id;
+    if (!uid) return;
+    if (!Array.isArray(workspaces) || workspaces.length <= 1) return;
+    if (workspaceConsolidating) return;
+
+    const flagKey = `pbf_ws_consolidated:${uid}`;
+    try {
+      if (localStorage.getItem(flagKey) === '1') return;
+    } catch {
+      // ignore
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setWorkspaceConsolidating(true);
+      setWorkspaceConsolidateError('');
+      try {
+        const { data, error } = await supabase.rpc('consolidate_single_workspace');
+        if (error) throw error;
+
+        const row = Array.isArray(data) ? data[0] : data;
+        const canonicalId = row?.canonical_workspace_id;
+        if (canonicalId) {
+          selectWorkspace(canonicalId);
+        }
+
+        await refreshWorkspaces?.();
+        if (!cancelled) {
+          try { localStorage.setItem(flagKey, '1'); } catch { /* ignore */ }
+        }
+      } catch (err) {
+        const msg = err?.message ? String(err.message) : 'Falha ao consolidar workspaces.';
+        if (!cancelled) setWorkspaceConsolidateError(msg);
+        if (isDebugEnabled()) {
+          debugLog('workspace.consolidate.error', {
+            message: err?.message,
+            details: err?.details,
+            hint: err?.hint,
+            code: err?.code
+          });
+        }
+      } finally {
+        if (!cancelled) setWorkspaceConsolidating(false);
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [
+    isAuthed,
+    refreshWorkspaces,
+    selectWorkspace,
+    session?.user?.id,
+    useSupabase,
+    workspaceConsolidating,
     workspaces,
     wsError,
     wsLoading
@@ -600,6 +669,10 @@ function App() {
         loading: workspaceAutoPickLoading,
         message: workspaceAutoPickMessage || null
       },
+      consolidate: {
+        loading: workspaceConsolidating,
+        error: workspaceConsolidateError || null
+      },
       selectedCalendarEvent: selectedCalendarEvent
         ? {
             kind: selectedCalendarEvent?.kind || 'session',
@@ -629,6 +702,8 @@ function App() {
     workspaceAutoPickLoading,
     workspaceAutoPickMessage,
     workspaceAutoPickTried,
+    workspaceConsolidateError,
+    workspaceConsolidating,
     wsLoading
   ]);
 
@@ -860,7 +935,7 @@ function App() {
   if (!isAuthed) return <Login onLogin={() => setIsAuthenticated(true)} />;
 
   // Workspace resolution gate (Supabase mode)
-  if (useSupabase && (wsLoading || autoWorkspaceCreating)) {
+  if (useSupabase && (wsLoading || autoWorkspaceCreating || workspaceConsolidating)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
         <div className="w-10 h-10 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -892,6 +967,14 @@ function App() {
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 whitespace-pre-line">
               <div className="font-extrabold">Erro ao carregar workspaces</div>
               <div className="mt-1">{wsError}</div>
+            </div>
+          ) : null}
+
+          {workspaceConsolidateError ? (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 whitespace-pre-line">
+              <div className="font-extrabold">Falha ao consolidar workspaces</div>
+              <div className="mt-1">{workspaceConsolidateError}</div>
+              <div className="mt-2 text-xs text-rose-800">Dica: execute a parte nova do supabase/schema.sql (função consolidate_single_workspace).</div>
             </div>
           ) : null}
 

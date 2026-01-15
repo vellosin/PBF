@@ -450,6 +450,142 @@ $$;
 
 grant execute on function public.create_workspace(text) to authenticated;
 
+-- 9) Single-workspace consolidation (1 login = 1 psicólogo) -----------------
+-- Some accounts may have multiple workspaces created during earlier versions or retries.
+-- This RPC consolidates data into a single canonical workspace and deletes duplicates
+-- ONLY when the workspace has exactly 1 member (the current user).
+create or replace function public.consolidate_single_workspace()
+returns table(
+  canonical_workspace_id uuid,
+  moved_patients int,
+  moved_notes int,
+  moved_datasets int,
+  deleted_workspaces int
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  canonical uuid;
+  candidate_ids uuid[];
+  deletable_ids uuid[];
+  moved_pat int := 0;
+  moved_not int := 0;
+  moved_dat int := 0;
+  deleted_ws int := 0;
+  s record;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+
+  -- Canonical = oldest workspace where the user is a member.
+  select w.id into canonical
+  from public.workspaces w
+  join public.workspace_members m on m.workspace_id = w.id
+  where m.user_id = auth.uid()
+  order by w.created_at asc
+  limit 1;
+
+  -- If none exists, create a new one.
+  if canonical is null then
+    insert into public.workspaces (name)
+    values ('Principal')
+    returning id into canonical;
+
+    insert into public.workspace_members (workspace_id, user_id, role)
+    values (canonical, auth.uid(), 'owner')
+    on conflict on constraint workspace_members_pkey do update set role = excluded.role;
+  end if;
+
+  -- All other workspaces this user belongs to.
+  select array_agg(w.id) into candidate_ids
+  from public.workspaces w
+  join public.workspace_members m on m.workspace_id = w.id
+  where m.user_id = auth.uid()
+    and w.id <> canonical;
+
+  if candidate_ids is null or array_length(candidate_ids, 1) is null then
+    return query select canonical, 0, 0, 0, 0;
+    return;
+  end if;
+
+  -- Only delete/workspace-migrate when the current user is the only member.
+  select array_agg(x.workspace_id) into deletable_ids
+  from (
+    select wm.workspace_id
+    from public.workspace_members wm
+    where wm.workspace_id = any(candidate_ids)
+    group by wm.workspace_id
+    having count(*) = 1 and max(wm.user_id) = auth.uid()
+  ) x;
+
+  if deletable_ids is null then
+    deletable_ids := array[]::uuid[];
+  end if;
+
+  if array_length(deletable_ids, 1) is null then
+    -- Nothing we can safely delete (shared workspaces). Still return canonical.
+    return query select canonical, 0, 0, 0, 0;
+    return;
+  end if;
+
+  -- Move datasets/patients/notes into canonical.
+  update public.datasets set workspace_id = canonical where workspace_id = any(deletable_ids);
+  get diagnostics moved_dat = row_count;
+
+  update public.patients set workspace_id = canonical where workspace_id = any(deletable_ids);
+  get diagnostics moved_pat = row_count;
+
+  -- Prevent unique conflicts on (workspace_id, appointment_key) by keeping canonical and deleting duplicates.
+  delete from public.notes n
+  using public.notes c
+  where n.workspace_id = any(deletable_ids)
+    and c.workspace_id = canonical
+    and n.appointment_key is not null
+    and c.appointment_key = n.appointment_key;
+
+  update public.notes set workspace_id = canonical where workspace_id = any(deletable_ids);
+  get diagnostics moved_not = row_count;
+
+  -- Merge workspace_settings into canonical.
+  insert into public.workspace_settings (workspace_id)
+  values (canonical)
+  on conflict (workspace_id) do nothing;
+
+  for s in
+    select * from public.workspace_settings where workspace_id = any(deletable_ids) order by updated_at asc
+  loop
+    update public.workspace_settings
+    set
+      psychologists = (
+        select array_agg(distinct x)
+        from unnest(coalesce(public.workspace_settings.psychologists, '{}'::text[]) || coalesce(s.psychologists, '{}'::text[])) x
+      ),
+      appointment_overrides = coalesce(public.workspace_settings.appointment_overrides, '{}'::jsonb) || coalesce(s.appointment_overrides, '{}'::jsonb),
+      payment_overrides = coalesce(public.workspace_settings.payment_overrides, '{}'::jsonb) || coalesce(s.payment_overrides, '{}'::jsonb),
+      extra_sessions = coalesce(public.workspace_settings.extra_sessions, '[]'::jsonb) || coalesce(s.extra_sessions, '[]'::jsonb)
+    where workspace_id = canonical;
+  end loop;
+
+  delete from public.workspace_settings where workspace_id = any(deletable_ids);
+
+  -- Ensure the canonical membership exists and user is owner.
+  insert into public.workspace_members (workspace_id, user_id, role)
+  values (canonical, auth.uid(), 'owner')
+  on conflict on constraint workspace_members_pkey do update set role = excluded.role;
+
+  -- Delete duplicate workspaces.
+  delete from public.workspaces where id = any(deletable_ids);
+  get diagnostics deleted_ws = row_count;
+
+  return query select canonical, moved_pat, moved_not, moved_dat, deleted_ws;
+end;
+$$;
+
+grant execute on function public.consolidate_single_workspace() to authenticated;
+
 -- Storage (configure in Storage UI):
 -- Buckets suggested:
 -- 1) seicologia-bases: path bases/{workspaceId}/{datasetId}/base.xlsx
