@@ -207,6 +207,7 @@ function App() {
   });
 
   const [patientsLoading, setPatientsLoading] = useState(false);
+  const [patientsError, setPatientsError] = useState('');
 
   // Supabase mode: load patients for the selected workspace
   useEffect(() => {
@@ -216,6 +217,7 @@ function App() {
     let cancelled = false;
     const load = async () => {
       setPatientsLoading(true);
+      setPatientsError('');
       const { data: rows, error } = await supabase
         .from('patients')
         .select('*')
@@ -223,6 +225,17 @@ function App() {
         .order('created_at', { ascending: true });
       if (cancelled) return;
       if (error) {
+        const msg = error?.message ? String(error.message) : 'Falha ao carregar pacientes.';
+        setPatientsError(msg);
+        if (isDebugEnabled()) {
+          debugLog('supabase.patients.load.error', {
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+            code: error?.code,
+            workspaceId: selectedWorkspace.id
+          });
+        }
         setPatientsLoading(false);
         return;
       }
@@ -398,8 +411,59 @@ function App() {
 
   const debugSnapshot = useMemo(() => {
     if (!isDebugEnabled()) return null;
+
+    const supabaseUrl = (() => {
+      try {
+        return String(import.meta.env.VITE_SUPABASE_URL || '') || null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const supabaseProjectRef = (() => {
+      try {
+        if (!supabaseUrl) return null;
+        const u = new URL(supabaseUrl);
+        const host = String(u.hostname || '');
+        // <ref>.supabase.co
+        return host.split('.')[0] || host;
+      } catch {
+        return null;
+      }
+    })();
+
     return {
       currentView,
+      env: {
+        useSupabase,
+        persistSession: String(import.meta.env.VITE_SUPABASE_PERSIST_SESSION || '0') === '1',
+        supabaseProjectRef,
+        authRedirectTo: (() => {
+          try {
+            return String(import.meta.env.VITE_AUTH_REDIRECT_TO || '') || null;
+          } catch {
+            return null;
+          }
+        })()
+      },
+      auth: {
+        userId: session?.user?.id || null,
+        email: session?.user?.email || null
+      },
+      workspace: {
+        loading: wsLoading,
+        count: Array.isArray(workspaces) ? workspaces.length : 0,
+        items: Array.isArray(workspaces)
+          ? workspaces.map((w) => ({ id: w?.id || null, name: w?.name || null }))
+          : null,
+        selectedWorkspaceId: selectedWorkspace?.id || null,
+        selectedWorkspaceName: selectedWorkspace?.name || null
+      },
+      patients: {
+        loading: patientsLoading,
+        error: patientsError || null,
+        count: Array.isArray(data) ? data.length : null
+      },
       selectedCalendarEvent: selectedCalendarEvent
         ? {
             kind: selectedCalendarEvent?.kind || 'session',
@@ -413,7 +477,20 @@ function App() {
           }
         : null
     };
-  }, [currentView, selectedCalendarEvent]);
+  }, [
+    currentView,
+    data,
+    patientsError,
+    patientsLoading,
+    selectedCalendarEvent,
+    selectedWorkspace?.id,
+    selectedWorkspace?.name,
+    session?.user?.email,
+    session?.user?.id,
+    useSupabase,
+    workspaces,
+    wsLoading
+  ]);
 
   // Persist data cache whenever it changes.
   // In Supabase mode, the DB is the source of truth; this is only a local cache per workspace.

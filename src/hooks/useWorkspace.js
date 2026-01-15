@@ -56,7 +56,7 @@ export function useWorkspace(session) {
       setLoading(true);
       const { data, error } = await supabase
         .from('workspace_members')
-        .select('role, workspaces ( id, name, join_code )')
+        .select('role, workspaces ( id, name, join_code, created_at )')
         .eq('user_id', userId);
 
       if (!mounted) return;
@@ -75,10 +75,21 @@ export function useWorkspace(session) {
             id: ws.id,
             name: ws.name,
             join_code: ws.join_code,
-            role: r.role
+            role: r.role,
+            created_at: ws.created_at
           };
         })
         .filter(Boolean);
+
+      // Deterministic ordering: prefer older workspaces first (more likely to contain existing data).
+      rows.sort((a, b) => {
+        const ta = a?.created_at ? Date.parse(a.created_at) : Number.POSITIVE_INFINITY;
+        const tb = b?.created_at ? Date.parse(b.created_at) : Number.POSITIVE_INFINITY;
+        if (Number.isFinite(ta) && Number.isFinite(tb)) return ta - tb;
+        if (Number.isFinite(ta)) return -1;
+        if (Number.isFinite(tb)) return 1;
+        return String(a?.name || '').localeCompare(String(b?.name || ''));
+      });
 
       setWorkspaces(rows);
 
@@ -104,7 +115,32 @@ export function useWorkspace(session) {
       })();
 
       const hasStored = stored && rows.some((w) => w.id === stored);
-      const nextId = hasStored ? stored : (rows[0]?.id || '');
+
+      // Optional override: allow ?ws=<workspaceId> to force selection (useful after domain migrations).
+      // Only applies if the workspace exists in the user's memberships.
+      const urlOverride = (() => {
+        try {
+          const url = new URL(window.location.href);
+          const ws = url.searchParams.get('ws');
+          if (!ws) return '';
+          const candidate = String(ws).trim();
+          if (!candidate) return '';
+          const ok = rows.some((w) => w.id === candidate);
+          if (!ok) return '';
+
+          // Clean URL after consuming override
+          url.searchParams.delete('ws');
+          window.history.replaceState({}, document.title, url.toString());
+          return candidate;
+        } catch {
+          return '';
+        }
+      })();
+
+      const preferredPrincipal = rows.find((w) => String(w?.name || '').trim().toLowerCase() === 'principal');
+      const nextId = urlOverride
+        ? urlOverride
+        : (hasStored ? stored : (preferredPrincipal?.id || rows[0]?.id || ''));
 
       setSelectedWorkspaceId(nextId);
       try {
@@ -142,15 +178,25 @@ export function useWorkspace(session) {
     setLoading(true);
     const { data } = await supabase
       .from('workspace_members')
-      .select('role, workspaces ( id, name, join_code )')
+      .select('role, workspaces ( id, name, join_code, created_at )')
       .eq('user_id', userId);
     const rows = (data || [])
       .map((r) => {
         const ws = r.workspaces;
         if (!ws?.id) return null;
-        return { id: ws.id, name: ws.name, join_code: ws.join_code, role: r.role };
+        return { id: ws.id, name: ws.name, join_code: ws.join_code, role: r.role, created_at: ws.created_at };
       })
       .filter(Boolean);
+
+    rows.sort((a, b) => {
+      const ta = a?.created_at ? Date.parse(a.created_at) : Number.POSITIVE_INFINITY;
+      const tb = b?.created_at ? Date.parse(b.created_at) : Number.POSITIVE_INFINITY;
+      if (Number.isFinite(ta) && Number.isFinite(tb)) return ta - tb;
+      if (Number.isFinite(ta)) return -1;
+      if (Number.isFinite(tb)) return 1;
+      return String(a?.name || '').localeCompare(String(b?.name || ''));
+    });
+
     setWorkspaces(rows);
     setLoading(false);
   };

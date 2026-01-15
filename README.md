@@ -63,6 +63,17 @@ Para signup/confirm/reset funcionarem no Vercel, configure em `Authentication �
 Se o email de confirmação estiver chegando com `localhost:3000` (ou outro localhost), isso é quase sempre porque o **Site URL** do Supabase está apontando para localhost.
 Ajuste o Site URL para o domínio público do app e (opcionalmente) configure `VITE_AUTH_REDIRECT_TO` no Vercel para garantir.
 
+Se o email estiver chegando com link do **Netlify**, quase sempre é porque:
+
+- o **Site URL** do Supabase ainda está como `https://<seu-site>.netlify.app`; e/ou
+- você deixou `VITE_AUTH_REDIRECT_TO` apontando para o Netlify nas env vars do build.
+
+Checklist rápido de migração Netlify → Vercel (Auth):
+
+- Troque o **Site URL** no Supabase para o domínio final do Vercel.
+- Garanta que esse domínio esteja em **Redirect URLs**.
+- No Vercel, ajuste `VITE_AUTH_REDIRECT_TO` para o domínio do Vercel (ou remova/ deixe vazio para usar `window.location.origin`).
+
 ---
 
 ## Deploy (Netlify) (legado)
