@@ -25,7 +25,7 @@
   .ui-modal-card {
     @apply relative w-full rounded-2xl border border-white/20;
     @apply bg-white/90 backdrop-blur-xl shadow-2xl;
-    @apply overflow-hidden flex flex-col;
+    @apply flex flex-col;
     @apply max-h-[85vh];
   }
 

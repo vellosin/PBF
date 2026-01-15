@@ -396,7 +396,7 @@ export function Calendar({ currentDate, appointments = [], onAppointmentClick, l
                 ? 'px-3.5 py-2'
                 : 'px-3.5 py-2.5';
 
-        const base = `absolute rounded-2xl border shadow-sm hover:shadow-md transition-shadow text-left box-border overflow-hidden ${padding}`;
+        const base = `absolute rounded-2xl border shadow-sm hover:shadow-md transition-shadow text-left box-border ${padding}`;
         const tone = (() => {
             if (kind === 'payment') {
                 const p = getPaymentTaskState(evt);
@@ -999,7 +999,7 @@ function TimedAppointmentBlock({ appt, onClick, style, heightPx }) {
     return (
         <button
             onClick={(e) => { e.stopPropagation(); onClick && onClick(appt); }}
-            className={`absolute rounded-lg border shadow-sm hover:shadow-md transition-shadow overflow-hidden ${statusColor}`}
+            className={`absolute rounded-lg border shadow-sm hover:shadow-md transition-shadow ${statusColor}`}
             style={style}
             title={`${appt.time || ''} ${appt.name || ''}`.trim()}
         >
