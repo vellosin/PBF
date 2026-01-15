@@ -57,6 +57,11 @@ create table if not exists public.workspace_members (
   primary key (workspace_id, user_id)
 );
 
+-- Enforce: 1 login = 1 workspace (single-user pivot)
+-- This prevents a user from being a member of multiple workspaces.
+create unique index if not exists workspace_members_user_id_uidx
+on public.workspace_members (user_id);
+
 -- Backfill-safe schema evolution
 alter table public.workspace_members add column if not exists main_psychologist text;
 
@@ -393,6 +398,11 @@ begin
     raise exception 'not authenticated';
   end if;
 
+  -- Single-workspace rule: if the user already has a workspace, do not join another.
+  if exists (select 1 from public.workspace_members m where m.user_id = auth.uid()) then
+    raise exception 'user already has a workspace';
+  end if;
+
   select w.id, w.name into wid, wname
   from public.workspaces w
   where w.join_code = upper(trim(p_code))
@@ -429,6 +439,20 @@ declare
 begin
   if auth.uid() is null then
     raise exception 'not authenticated';
+  end if;
+
+  -- Idempotent behavior under the single-workspace rule:
+  -- If the user already has a workspace, return it instead of creating a new one.
+  select w.id, w.name, w.join_code into wid, wname, jcode
+  from public.workspaces w
+  join public.workspace_members m on m.workspace_id = w.id
+  where m.user_id = auth.uid()
+  order by w.created_at asc
+  limit 1;
+
+  if wid is not null then
+    return query select wid as workspace_id, wname as workspace_name, jcode as join_code;
+    return;
   end if;
 
   wname := nullif(trim(p_name), '');
