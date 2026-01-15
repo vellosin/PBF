@@ -59,6 +59,10 @@ function App() {
     refresh: refreshWorkspaces,
   } = useWorkspace(session);
 
+  const [workspaceAutoPickTried, setWorkspaceAutoPickTried] = useState(false);
+  const [workspaceAutoPickLoading, setWorkspaceAutoPickLoading] = useState(false);
+  const [workspaceAutoPickMessage, setWorkspaceAutoPickMessage] = useState('');
+
   // Single-user pivot: if the account has no workspace yet, create one automatically.
   // This removes the join/create workspace screen from the UX.
   const [autoWorkspaceCreating, setAutoWorkspaceCreating] = useState(false);
@@ -289,6 +293,107 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useSupabase, selectedWorkspace?.id]);
 
+  // If the account has many workspaces (often due to past auto-creates), and the currently selected
+  // workspace has 0 patients, try to find the workspace that contains the data and switch to it.
+  useEffect(() => {
+    if (!useSupabase || !supabase) return;
+    if (!isAuthed) return;
+    if (wsLoading || wsError) return;
+    if (!selectedWorkspaceId) return;
+    if (!Array.isArray(workspaces) || workspaces.length <= 1) return;
+    if (workspaceAutoPickTried) return;
+    if (patientsLoading) return;
+    if (patientsError) {
+      setWorkspaceAutoPickTried(true);
+      return;
+    }
+
+    const currentCount = Array.isArray(data) ? data.length : 0;
+    if (currentCount > 0) {
+      setWorkspaceAutoPickTried(true);
+      return;
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const scan = async () => {
+      setWorkspaceAutoPickTried(true);
+      setWorkspaceAutoPickLoading(true);
+      setWorkspaceAutoPickMessage('');
+
+      try {
+        // Limit concurrency to be gentle with PostgREST.
+        const concurrency = 5;
+        const ids = workspaces.map((w) => w?.id).filter(Boolean);
+        const results = [];
+
+        for (let i = 0; i < ids.length; i += concurrency) {
+          const batch = ids.slice(i, i + concurrency);
+          const batchRes = await Promise.all(
+            batch.map(async (wid) => {
+              const { count, error } = await supabase
+                .from('patients')
+                .select('id', { count: 'exact', head: true })
+                .eq('workspace_id', wid);
+              if (error) return { workspaceId: wid, count: 0, error };
+              return { workspaceId: wid, count: count ?? 0, error: null };
+            })
+          );
+          results.push(...batchRes);
+          // Tiny pause between batches to reduce chance of rate limiting.
+          await sleep(80);
+        }
+
+        const best = results.reduce(
+          (acc, r) => {
+            const c = Number(r?.count) || 0;
+            if (c > acc.count) return { workspaceId: r.workspaceId, count: c };
+            return acc;
+          },
+          { workspaceId: '', count: 0 }
+        );
+
+        if (best.workspaceId && best.count > 0 && best.workspaceId !== selectedWorkspaceId) {
+          const wsName = workspaces.find((w) => w.id === best.workspaceId)?.name || '';
+          setWorkspaceAutoPickMessage(
+            `Encontramos seus dados em outro workspace e alternamos automaticamente.\n` +
+            `Workspace: ${wsName || best.workspaceId} (pacientes: ${best.count})`
+          );
+          if (isDebugEnabled()) {
+            debugLog('workspace.autoPick', {
+              from: selectedWorkspaceId,
+              to: best.workspaceId,
+              patients: best.count,
+              workspaces: workspaces.length
+            });
+          }
+          selectWorkspace(best.workspaceId);
+        }
+      } catch (err) {
+        if (isDebugEnabled()) {
+          debugLog('workspace.autoPick.error', {
+            message: err?.message || String(err)
+          });
+        }
+      } finally {
+        setWorkspaceAutoPickLoading(false);
+      }
+    };
+
+    scan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    data,
+    isAuthed,
+    patientsError,
+    patientsLoading,
+    selectedWorkspaceId,
+    useSupabase,
+    workspaces,
+    workspaceAutoPickTried,
+    wsError,
+    wsLoading
+  ]);
+
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
@@ -490,6 +595,11 @@ function App() {
         error: patientsError || null,
         count: Array.isArray(data) ? data.length : null
       },
+      autoPick: {
+        tried: workspaceAutoPickTried,
+        loading: workspaceAutoPickLoading,
+        message: workspaceAutoPickMessage || null
+      },
       selectedCalendarEvent: selectedCalendarEvent
         ? {
             kind: selectedCalendarEvent?.kind || 'session',
@@ -516,6 +626,9 @@ function App() {
     useSupabase,
     workspaces,
     wsError,
+    workspaceAutoPickLoading,
+    workspaceAutoPickMessage,
+    workspaceAutoPickTried,
     wsLoading
   ]);
 
@@ -955,6 +1068,33 @@ function App() {
               <div className="mt-2 text-xs text-amber-800">
                 Dica: abra com <span className="font-mono">?debug=1</span> para ver o workspace selecionado e o projeto do Supabase.
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {useSupabase && workspaceAutoPickLoading ? (
+          <div className="px-8 lg:px-12">
+            <div className="max-w-6xl mx-auto rounded-2xl border border-slate-200 bg-white/70 backdrop-blur px-4 py-3 text-sm text-slate-800 whitespace-pre-line">
+              <div className="font-extrabold">Procurando seus dados...</div>
+              <div className="mt-1">Detectando automaticamente o workspace correto.</div>
+            </div>
+          </div>
+        ) : null}
+
+        {useSupabase && !workspaceAutoPickLoading && workspaceAutoPickMessage ? (
+          <div className="px-8 lg:px-12">
+            <div className="max-w-6xl mx-auto rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 whitespace-pre-line flex items-start justify-between gap-4">
+              <div>
+                <div className="font-extrabold">Workspace ajustado</div>
+                <div className="mt-1">{workspaceAutoPickMessage}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWorkspaceAutoPickMessage('')}
+                className="px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
+              >
+                OK
+              </button>
             </div>
           </div>
         ) : null}
