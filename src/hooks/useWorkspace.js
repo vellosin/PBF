@@ -31,6 +31,7 @@ const formatSupabaseError = (err) => {
 
 export function useWorkspace(session) {
   const userId = session?.user?.id || null;
+  const metaSelectedWorkspaceIdRaw = session?.user?.user_metadata?.selectedWorkspaceId;
 
   const [loading, setLoading] = useState(Boolean(supabase && userId));
   const [error, setError] = useState('');
@@ -47,6 +48,29 @@ export function useWorkspace(session) {
   const selectedWorkspace = useMemo(() => {
     return workspaces.find((w) => w.id === selectedWorkspaceId) || null;
   }, [workspaces, selectedWorkspaceId]);
+
+  const updateSelectedWorkspaceInAuth = async (id) => {
+    if (!supabase) return;
+    if (!userId) return;
+    try {
+      const next = id ? String(id) : '';
+      const current = metaSelectedWorkspaceIdRaw ? String(metaSelectedWorkspaceIdRaw) : '';
+      if (next === current) return;
+
+      const existingMeta = (session?.user?.user_metadata && typeof session.user.user_metadata === 'object')
+        ? session.user.user_metadata
+        : {};
+
+      await supabase.auth.updateUser({
+        data: {
+          ...existingMeta,
+          selectedWorkspaceId: next || null
+        }
+      });
+    } catch {
+      // ignore (localStorage fallback still works)
+    }
+  };
 
   useEffect(() => {
     if (!supabase || !userId) return;
@@ -100,6 +124,10 @@ export function useWorkspace(session) {
       // Auto-select: read per-user key (migrate from legacy if needed) and validate it exists.
       const stored = (() => {
         try {
+          // 1) Prefer Supabase Auth metadata so selection persists across browsers.
+          const meta = metaSelectedWorkspaceIdRaw ? String(metaSelectedWorkspaceIdRaw).trim() : '';
+          if (meta && rows.some((w) => w.id === meta)) return meta;
+
           const perUserKey = keyForUser(userId);
           const perUser = localStorage.getItem(perUserKey) || '';
           if (perUser) return perUser;
@@ -155,6 +183,11 @@ export function useWorkspace(session) {
         // ignore
       }
 
+      // Keep Supabase Auth metadata in sync (cross-browser).
+      if (nextId) {
+        updateSelectedWorkspaceInAuth(nextId);
+      }
+
       setLoading(false);
     };
 
@@ -175,6 +208,9 @@ export function useWorkspace(session) {
     } catch {
       // ignore
     }
+
+    // Persist across browsers
+    updateSelectedWorkspaceInAuth(id);
   };
 
   const refresh = async () => {
