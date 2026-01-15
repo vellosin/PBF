@@ -65,6 +65,7 @@ function App() {
 
   const [workspaceConsolidating, setWorkspaceConsolidating] = useState(false);
   const [workspaceConsolidateError, setWorkspaceConsolidateError] = useState('');
+  const [workspaceConsolidateDisabled, setWorkspaceConsolidateDisabled] = useState(false);
 
   // Single-user pivot: if the account has no workspace yet, create one automatically.
   // This removes the join/create workspace screen from the UX.
@@ -121,10 +122,20 @@ function App() {
     if (!uid) return;
     if (!Array.isArray(workspaces) || workspaces.length <= 1) return;
     if (workspaceConsolidating) return;
+    if (workspaceConsolidateDisabled) return;
 
-    const flagKey = `pbf_ws_consolidated:${uid}`;
+    const attemptedKey = `pbf_ws_consolidate_attempted:${uid}`;
+    const consolidatedKey = `pbf_ws_consolidated:${uid}`;
+    const disabledKey = `pbf_ws_consolidate_disabled:${uid}`;
     try {
-      if (localStorage.getItem(flagKey) === '1') return;
+      if (localStorage.getItem(consolidatedKey) === '1') return;
+      if (localStorage.getItem(disabledKey) === '1') {
+        setWorkspaceConsolidateDisabled(true);
+        return;
+      }
+      // Prevent endless retry loops: attempt consolidation at most once automatically.
+      if (localStorage.getItem(attemptedKey) === '1') return;
+      localStorage.setItem(attemptedKey, '1');
     } catch {
       // ignore
     }
@@ -145,11 +156,29 @@ function App() {
 
         await refreshWorkspaces?.();
         if (!cancelled) {
-          try { localStorage.setItem(flagKey, '1'); } catch { /* ignore */ }
+          try { localStorage.setItem(consolidatedKey, '1'); } catch { /* ignore */ }
         }
       } catch (err) {
         const msg = err?.message ? String(err.message) : 'Falha ao consolidar workspaces.';
         if (!cancelled) setWorkspaceConsolidateError(msg);
+
+        // If the function isn't installed yet, don't keep retrying.
+        const code = String(err?.code || '');
+        const message = String(err?.message || '');
+        const details = String(err?.details || '');
+        const looksMissingFn =
+          code === 'PGRST202' ||
+          code === '42883' ||
+          /consolidate_single_workspace/i.test(message) ||
+          /consolidate_single_workspace/i.test(details) ||
+          /Could not find the function/i.test(message) ||
+          /could not find the function/i.test(message);
+
+        if (looksMissingFn && !cancelled) {
+          setWorkspaceConsolidateDisabled(true);
+          try { localStorage.setItem(disabledKey, '1'); } catch { /* ignore */ }
+        }
+
         if (isDebugEnabled()) {
           debugLog('workspace.consolidate.error', {
             message: err?.message,
@@ -172,6 +201,7 @@ function App() {
     session?.user?.id,
     useSupabase,
     workspaceConsolidating,
+    workspaceConsolidateDisabled,
     workspaces,
     wsError,
     wsLoading
@@ -671,6 +701,7 @@ function App() {
       },
       consolidate: {
         loading: workspaceConsolidating,
+        disabled: workspaceConsolidateDisabled,
         error: workspaceConsolidateError || null
       },
       selectedCalendarEvent: selectedCalendarEvent
@@ -702,10 +733,18 @@ function App() {
     workspaceAutoPickLoading,
     workspaceAutoPickMessage,
     workspaceAutoPickTried,
+    workspaceConsolidateDisabled,
     workspaceConsolidateError,
     workspaceConsolidating,
     wsLoading
   ]);
+
+  const showWorkspaceConsolidateBanner =
+    useSupabase &&
+    isAuthed &&
+    Array.isArray(workspaces) &&
+    workspaces.length > 1 &&
+    (workspaceConsolidating || Boolean(workspaceConsolidateError));
 
   // Persist data cache whenever it changes.
   // In Supabase mode, the DB is the source of truth; this is only a local cache per workspace.
@@ -935,7 +974,8 @@ function App() {
   if (!isAuthed) return <Login onLogin={() => setIsAuthenticated(true)} />;
 
   // Workspace resolution gate (Supabase mode)
-  if (useSupabase && (wsLoading || autoWorkspaceCreating || workspaceConsolidating)) {
+  // NOTE: do NOT gate on workspaceConsolidating to avoid "stuck loading" if the RPC isn't installed yet.
+  if (useSupabase && (wsLoading || autoWorkspaceCreating)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
         <div className="w-10 h-10 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -1117,6 +1157,36 @@ function App() {
       />
 
       <main className="flex-1 w-0 flex flex-col transition-all duration-300 min-h-screen">
+        {showWorkspaceConsolidateBanner && (
+          <div className="px-8 lg:px-12">
+            <div
+              className={
+                'max-w-6xl mx-auto rounded-2xl border px-4 py-3 text-sm mb-4 ' +
+                (workspaceConsolidateError
+                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                  : 'border-slate-200 bg-white/70 backdrop-blur text-slate-700')
+              }
+            >
+              {workspaceConsolidating ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                  <div>Consolidando workspaces duplicados…</div>
+                </div>
+              ) : (
+                <div>
+                  <div className="font-semibold">Workspaces duplicados detectados</div>
+                  <div className="mt-1">
+                    Não foi possível consolidar automaticamente. O app vai continuar carregando normalmente, mas para
+                    corrigir definitivamente execute a migration no Supabase (função `consolidate_single_workspace`).
+                  </div>
+                  {workspaceConsolidateError && (
+                    <div className="mt-2 text-xs opacity-80 break-words">{workspaceConsolidateError}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* Header Container */}
         <div className="sticky top-0 z-10 bg-white/20 backdrop-blur-md px-8 py-6 lg:px-12 lg:py-8 border-b border-white/30 mb-6">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
