@@ -518,7 +518,7 @@ begin
     from public.workspace_members wm
     where wm.workspace_id = any(candidate_ids)
     group by wm.workspace_id
-    having count(*) = 1 and max(wm.user_id) = auth.uid()
+    having count(*) = 1 and bool_and(wm.user_id = auth.uid())
   ) x;
 
   if deletable_ids is null then

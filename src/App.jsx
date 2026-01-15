@@ -124,7 +124,6 @@ function App() {
     if (workspaceConsolidating) return;
     if (workspaceConsolidateDisabled) return;
 
-    const attemptedKey = `pbf_ws_consolidate_attempted:${uid}`;
     const consolidatedKey = `pbf_ws_consolidated:${uid}`;
     const disabledKey = `pbf_ws_consolidate_disabled:${uid}`;
     try {
@@ -133,9 +132,6 @@ function App() {
         setWorkspaceConsolidateDisabled(true);
         return;
       }
-      // Prevent endless retry loops: attempt consolidation at most once automatically.
-      if (localStorage.getItem(attemptedKey) === '1') return;
-      localStorage.setItem(attemptedKey, '1');
     } catch {
       // ignore
     }
@@ -168,11 +164,12 @@ function App() {
         const details = String(err?.details || '');
         const looksMissingFn =
           code === 'PGRST202' ||
-          code === '42883' ||
-          /consolidate_single_workspace/i.test(message) ||
-          /consolidate_single_workspace/i.test(details) ||
           /Could not find the function/i.test(message) ||
-          /could not find the function/i.test(message);
+          /could not find the function/i.test(message) ||
+          /function\s+consolidate_single_workspace\s*\(/i.test(message) ||
+          /function\s+public\.consolidate_single_workspace\s*\(/i.test(message) ||
+          /consolidate_single_workspace\(\)\s+does not exist/i.test(message) ||
+          /consolidate_single_workspace\(\)\s+does not exist/i.test(details);
 
         if (looksMissingFn && !cancelled) {
           setWorkspaceConsolidateDisabled(true);

@@ -240,7 +240,7 @@ export function AppointmentModal({ appointment, onClose, onUpdate, onUpsertNote 
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => updateStatus('occurred')}
+                                        onClick={() => updateStatus('occurred', { closeImmediately: true })}
                                         className="px-3 py-2 rounded-xl font-bold text-xs bg-sky-600 hover:bg-sky-700 text-white transition-colors"
                                     >
                                         {t('status_occurred')}
