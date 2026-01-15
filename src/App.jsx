@@ -191,20 +191,42 @@ function App() {
     };
   };
 
-  // Initialize from LocalStorage if available (scoped by workspace when using Supabase)
+  // Initialize from LocalStorage if available (scoped by workspace when using Supabase).
+  // Note: on first render in Supabase mode, selectedWorkspace may not be known yet;
+  // we also rehydrate on workspace changes below.
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem(scopedKey('seicologia_patients', storageWorkspaceId));
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Sanitize all loaded data to fix string/number issues and stale indexes
-        return Array.isArray(parsed) ? parsed.map((p, idx) => sanitizePatient(p, `legacy-${idx}`)) : null;
-      } catch {
-        return null;
-      }
+    try {
+      const key = scopedKey('seicologia_patients', storageWorkspaceId);
+      const saved = localStorage.getItem(key);
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed.map((p, idx) => sanitizePatient(p, `legacy-${idx}`)) : null;
+    } catch {
+      return null;
     }
-    return null;
   });
+
+  // Rehydrate local cache whenever the effective workspace changes.
+  // This prevents "empty" state on refresh while Supabase loads (or when Supabase is temporarily unavailable).
+  useEffect(() => {
+    if (useSupabase && !storageWorkspaceId) return;
+
+    try {
+      const key = scopedKey('seicologia_patients', storageWorkspaceId);
+      const saved = localStorage.getItem(key);
+      if (!saved) {
+        setData(null);
+        return;
+      }
+
+      const parsed = JSON.parse(saved);
+      const next = Array.isArray(parsed) ? parsed.map((p, idx) => sanitizePatient(p, `cache-${idx}`)) : null;
+      setData(next);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageWorkspaceId, useSupabase]);
 
   const [patientsLoading, setPatientsLoading] = useState(false);
   const [patientsError, setPatientsError] = useState('');
@@ -912,6 +934,18 @@ function App() {
             </div>
           </div>
         </div>
+
+        {useSupabase && patientsError ? (
+          <div className="px-8 lg:px-12">
+            <div className="max-w-6xl mx-auto rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 whitespace-pre-line">
+              <div className="font-extrabold">Falha ao carregar dados do Supabase</div>
+              <div className="mt-1">{patientsError}</div>
+              <div className="mt-2 text-xs text-amber-800">
+                Dica: abra com <span className="font-mono">?debug=1</span> para ver o workspace selecionado e o projeto do Supabase.
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Main Content Container */}
         <div className="px-8 lg:px-12 pb-12 flex-1">

@@ -41,7 +41,7 @@ Opcional:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- (opcional) `VITE_SUPABASE_PERSIST_SESSION=1`
+- (recomendado) `VITE_SUPABASE_PERSIST_SESSION=1` (mantém logado ao recarregar a página)
 - (opcional) `VITE_AUTH_REDIRECT_TO=https://<seu-site>.vercel.app`
 
 5) Deploy.
@@ -50,6 +50,12 @@ Notas:
 
 - O arquivo `vercel.json` já inclui rewrite para SPA (equivalente ao `_redirects` do Netlify).
 - O app **não** permite “login local” por padrão. Se as env vars do Supabase não estiverem configuradas no Vercel, você verá a mensagem de Supabase não configurado e não vai conseguir avançar.
+
+Se os dados (pacientes/tarefas/etc) “somem” ao recarregar ou não aparecem em outro navegador:
+
+- Confirme que você está realmente em modo Supabase (env vars de Supabase configuradas no Vercel).
+- Se você quer ficar logado ao recarregar, configure `VITE_SUPABASE_PERSIST_SESSION=1`.
+- Se você habilitar `VITE_ALLOW_LOCAL_AUTH=1` e o Supabase estiver mal configurado, o app pode funcionar em modo local (dados não sincronizam entre navegadores).
 
 ## Supabase Auth (URLs)
 
