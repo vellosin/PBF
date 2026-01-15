@@ -1016,6 +1016,22 @@ function App() {
           ) : null}
 
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
+            {String(wsError || '').toLowerCase().includes('sessão expirou') || String(wsError || '').toLowerCase().includes('jwt expired') ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await supabase?.auth?.signOut?.();
+                  } finally {
+                    window.location.reload();
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 transition-colors"
+              >
+                Fazer login novamente
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={async () => {

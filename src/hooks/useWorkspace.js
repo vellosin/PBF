@@ -29,6 +29,52 @@ const formatSupabaseError = (err) => {
   return text || String(err);
 };
 
+const isJwtExpiredError = (err) => {
+  if (!err) return false;
+  const code = String(err?.code || '').trim().toUpperCase();
+  if (code === 'PGRST303') return true;
+
+  const msg = String(err?.message || '').toLowerCase();
+  return msg.includes('jwt expired') || msg.includes('token is expired');
+};
+
+const tryRefreshSession = async () => {
+  if (!supabase) return { ok: false, error: new Error('Supabase não configurado') };
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) return { ok: false, error };
+    return { ok: true, session: data?.session || null };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+};
+
+const signOutSafely = async () => {
+  if (!supabase) return;
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // ignore
+  }
+};
+
+const withJwtRetry = async (fn) => {
+  const first = await fn();
+  if (!first?.error || !isJwtExpiredError(first.error)) return first;
+
+  const refreshed = await tryRefreshSession();
+  if (!refreshed.ok) {
+    await signOutSafely();
+    return first;
+  }
+
+  const second = await fn();
+  if (second?.error && isJwtExpiredError(second.error)) {
+    await signOutSafely();
+  }
+  return second;
+};
+
 export function useWorkspace(session) {
   const userId = session?.user?.id || null;
   const metaSelectedWorkspaceIdRaw = session?.user?.user_metadata?.selectedWorkspaceId;
@@ -80,16 +126,22 @@ export function useWorkspace(session) {
     const load = async () => {
       setLoading(true);
       setError('');
-      const { data, error } = await supabase
-        .from('workspace_members')
-        .select('role, workspaces ( id, name, join_code, created_at )')
-        .eq('user_id', userId);
+      const { data, error } = await withJwtRetry(() =>
+        supabase
+          .from('workspace_members')
+          .select('role, workspaces ( id, name, join_code, created_at )')
+          .eq('user_id', userId)
+      );
 
       if (!mounted) return;
 
       if (error) {
         setWorkspaces([]);
-        setError(formatSupabaseError(error));
+        if (isJwtExpiredError(error)) {
+          setError('Sua sessão expirou. Faça login novamente.');
+        } else {
+          setError(formatSupabaseError(error));
+        }
         setLoading(false);
         return;
       }
@@ -225,10 +277,23 @@ export function useWorkspace(session) {
     if (!supabase || !userId) return;
     setLoading(true);
     setError('');
-    const { data } = await supabase
-      .from('workspace_members')
-      .select('role, workspaces ( id, name, join_code, created_at )')
-      .eq('user_id', userId);
+    const { data, error } = await withJwtRetry(() =>
+      supabase
+        .from('workspace_members')
+        .select('role, workspaces ( id, name, join_code, created_at )')
+        .eq('user_id', userId)
+    );
+
+    if (error) {
+      if (isJwtExpiredError(error)) {
+        setError('Sua sessão expirou. Faça login novamente.');
+      } else {
+        setError(formatSupabaseError(error));
+      }
+      setWorkspaces([]);
+      setLoading(false);
+      return;
+    }
     const rows = (data || [])
       .map((r) => {
         const ws = r.workspaces;
@@ -258,7 +323,7 @@ export function useWorkspace(session) {
     if (!wname) throw new Error('Informe um nome');
 
     // Prefer RPC (atomic): avoids RLS issues with insert+select before membership exists.
-    const { data, error } = await supabase.rpc('create_workspace', { p_name: wname });
+    const { data, error } = await withJwtRetry(() => supabase.rpc('create_workspace', { p_name: wname }));
     if (error) {
       if (isDebugSupabase()) console.error('[supabase.rpc:create_workspace] error', error);
       throw new Error(formatSupabaseError(error));
@@ -279,7 +344,7 @@ export function useWorkspace(session) {
     if (!code) throw new Error('Informe o código');
 
     // Prefer RPC (recommended) so we don't have to expose workspaces by join_code.
-    const { data, error } = await supabase.rpc('join_workspace_by_code', { p_code: code });
+    const { data, error } = await withJwtRetry(() => supabase.rpc('join_workspace_by_code', { p_code: code }));
     if (error) {
       if (isDebugSupabase()) console.error('[supabase.rpc:join_workspace_by_code] error', error);
       throw new Error(formatSupabaseError(error));
