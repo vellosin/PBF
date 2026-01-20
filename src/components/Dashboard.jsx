@@ -229,7 +229,7 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-lg shadow-slate-200/50">
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg shadow-slate-200/50">
                 <div className="flex flex-col lg:flex-row lg:items-end gap-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1">
                         <div>
@@ -316,7 +316,7 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
 
             {/* Focused Dashboard Panels */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl shadow-slate-200/50">
+                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-xl shadow-slate-200/50">
                     <div className="flex items-start justify-between gap-4 mb-4">
                         <div>
                             <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
@@ -351,12 +351,12 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
                         ) : null}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-5">
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200">
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t('pay_recurrence_monthly')}</p>
                             <p className="text-lg font-bold text-slate-800">R$ {receivables.totals.monthly.toLocaleString(i18n.language)}</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200">
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t('pay_recurrence_weekly')}</p>
                             <p className="text-lg font-bold text-slate-800">R$ {receivables.totals.weekly.toLocaleString(i18n.language)}</p>
                         </div>
@@ -367,7 +367,7 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
                             <div className="text-sm text-slate-500">{t('payments_none_configured')}</div>
                         ) : (
                             receivables.items.slice(0, 12).map(it => (
-                                <div key={it.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-colors">
+                                <div key={it.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-colors">
                                     <div className="min-w-0">
                                         <p className="font-bold text-slate-800 truncate" title={it.name}>{it.name}</p>
                                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
@@ -390,7 +390,7 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
                     </div>
                 </div>
 
-                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl shadow-slate-200/50">
+                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-xl shadow-slate-200/50">
                     <div className="flex items-start justify-between gap-4 mb-4">
                         <div>
                             <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
@@ -412,7 +412,7 @@ export function Dashboard({ patients, appointments, currentDate, onDateChange })
                             <div className="text-sm text-slate-500">{t('adjustments_none')}</div>
                         ) : (
                             overduePatients.slice(0, 12).map(p => (
-                                <div key={p.id} className="flex items-center justify-between p-3 rounded-2xl border border-amber-200 bg-amber-50/40">
+                                <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl border border-amber-200 bg-amber-50/40">
                                     <div className="min-w-0">
                                         <p className="font-bold text-slate-900 truncate" title={p.name}>{p.name}</p>
                                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 mt-0.5">
